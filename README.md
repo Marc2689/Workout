@@ -1,4 +1,4 @@
-# Workout Tracker — free Hevy-style workout tracker
+# Workout Tracker
 
 Offline, no account, no ads, no subscription. All data stays on your device.
 
