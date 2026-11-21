@@ -755,6 +755,7 @@ function presetsHTML(compact){
     return `<div class="card"><div class="row-b"><div><div class="pname">${esc(p.name)}</div><div class="muted sm">${esc(p.desc)} · ${its.length} exercises</div></div><button class="btn sm acc" data-act="startPreset" data-id="${p.id}">Start</button></div>
     ${compact?'':`<div style="margin:8px 0 10px">${its.map(i=>`<div class="pitem"><span data-act="exInfo" data-id="${i.exId}">${i.sets}× ${esc(exById(i.exId).name)}</span><span>${esc(i.target)}</span></div>`).join('')}</div>
     <button class="btn sm ghost" data-act="savePreset" data-id="${p.id}">Save to my routines</button>`}</div>`}).join('')}
+const fmtRest=s=>s>0?`${Math.floor(s/60)}:${pad(s%60)}`:'Off';
 function vWorkout(){
   const A=S.active;
   if(!A){
@@ -766,6 +767,7 @@ function vWorkout(){
   let vol=0,sets=0;A.items.forEach(it=>{const t=exById(it.exId).type;it.sets.forEach(s=>{if(s.done){sets++;if(t==='wr')vol+=(s.w||0)*(s.r||0)}})});
   return `<div class="row-b"><input class="title" data-f="wname" value="${esc(A.name)}"><button class="btn sm acc" data-act="finish">Finish</button></div>
   <div class="stats3"><div><small>Duration</small><b id="elapsed">${fmtDur(Date.now()-A.start)}</b></div><div><small>Volume</small><b>${fmtVol(vol)}</b></div><div><small>Sets</small><b>${sets}</b></div></div>
+  <div class="card row-b restset"><span>⏱ Rest timer <span class="muted sm">(after each set)</span></span><span><button data-act="restDef" data-d="-15">−</button><b style="padding:0 10px;min-width:54px;display:inline-block;text-align:center">${fmtRest(S.settings.rest)}</b><button data-act="restDef" data-d="15">+</button></span></div>
   ${A.items.map(itemHTML).join('')}
   <button class="btn big" data-act="addEx">+ Add Exercise</button>
   <div class="row-b" style="margin-top:8px"><button class="btn ghost" data-act="saveAsRoutine">Save as routine</button><button class="btn danger" data-act="discard">Discard workout</button></div>`}
@@ -815,7 +817,7 @@ function vStats(){
   ${prs.length?`<h2>Personal records</h2><div class="card">${prs.map(p=>`<div class="li"><span>${esc(p.e.name)}</span><span class="sm"><b>${dw(p.bw)} ${U()} × ${p.br}</b> <span class="muted">· 1RM ≈ ${Math.round(dw(p.b1))}</span></span></div>`).join('')}</div>`:''}
   <h2>Settings & backup</h2><div class="card">
   <label class="lb" style="margin-top:0">Units</label><div class="seg"><button class="${U()==='kg'?'on':''}" data-act="unit" data-u="kg">kg</button><button class="${U()==='lb'?'on':''}" data-act="unit" data-u="lb">lb</button></div>
-  <label class="lb">Default rest timer (seconds)</label><input inputmode="numeric" data-f="rest" value="${S.settings.rest}">
+  <label class="lb">Default rest timer (seconds, 0 = off — also adjustable during a workout)</label><input inputmode="numeric" data-f="rest" value="${S.settings.rest}">
   <label class="lb">Your data lives only on this device. Back it up regularly.</label>
   <div class="grid2"><button class="btn" data-act="exportJson">Export backup</button><button class="btn" data-act="exportCsv">Export CSV</button></div>
   <button class="btn" style="width:100%;margin-top:8px" data-act="importJson">Import backup</button>
@@ -922,6 +924,7 @@ const ACT={
       try{audio=audio||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
     }else s.done=false;
     save();render()},
+  restDef(t){S.settings.rest=Math.max(0,Math.min(900,(+S.settings.rest||0)+ +t.dataset.d));save();render()},
   restMinus(){const A=S.active;if(A&&A.restEnd){A.restEnd-=15000;A.restTotal=Math.max(1000,(A.restTotal||0)-15000);save();updateRest()}},
   restPlus(){const A=S.active;if(A&&A.restEnd){A.restEnd+=15000;A.restTotal=(A.restTotal||0)+15000;save();updateRest()}},
   restSkip(){const A=S.active;if(A){A.restEnd=null;save();updateRest()}},
