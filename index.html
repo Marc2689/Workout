@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Workout Tracker">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>IronLog</title>
+<title>Workout Tracker</title>
 <style>
 :root{--bg:#0f1115;--card:#181b22;--card2:#20242d;--txt:#eef0f4;--mut:#8b93a3;--acc:#ff6b35;--ok:#2ecc71;--bad:#e5484d;--line:#2a2f3a;--safe:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -66,6 +67,10 @@ svg.chart{width:100%;height:auto;display:block}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + var(--safe));background:#000c;padding:10px 16px;border-radius:99px;z-index:50;display:none;font-size:14px}
 label.lb{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .pr{color:#ffd23f;font-weight:600}
+.how{margin:0;padding-left:20px}.how li{margin:6px 0}
+.tip{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,107,53,.12);font-size:14px}
+.pname{font-weight:700}.pitem{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:13px;color:var(--mut)}.pitem span:first-child{cursor:pointer;text-decoration:underline dotted}
+h2 .sm{font-weight:400}
 </style>
 </head>
 <body>
@@ -191,11 +196,479 @@ function seedExercises(){const out=[];let m='Other';
   return out}
 
 /* ---------- state ---------- */
-const KEY='ironlog.v1';
+const KEY='ironlog.v1'; /* unchanged on purpose so existing saved data keeps loading */
 const fresh=()=>({exercises:seedExercises(),routines:[],workouts:[],active:null,settings:{unit:'kg',rest:90}});
 function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.exercises)&&Array.isArray(d.workouts)){d.routines=d.routines||[];d.settings=Object.assign({unit:'kg',rest:90},d.settings);return d}}catch(e){}return fresh()}
 let S=load();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save — storage full?')}}
+/* ---------- how-to instructions (built-in exercises) ---------- */
+const INFOTXT=`@Bench Press (Barbell)
+Lie on the bench with eyes under the bar, feet flat, shoulder blades pinched together and down.
+Grip the bar slightly wider than shoulder width and unrack it over your shoulders.
+Lower the bar under control to your mid-chest, elbows about 45–70° from your torso.
+Press up and slightly back until your arms are straight.
+! Keep your glutes on the bench and use a spotter or safety arms for heavy sets.
+@Incline Bench Press (Barbell)
+Set the bench to 30–45° and lie back with feet planted and shoulder blades tucked.
+Unrack with a shoulder-width-plus grip and hold the bar over your upper chest.
+Lower to your upper chest with control.
+Press back up until your arms lock out.
+! A steeper angle shifts work to the shoulders — 30° is usually the sweet spot.
+@Decline Bench Press (Barbell)
+Secure your legs on a decline bench and lie back with the bar over your lower chest.
+Unrack and lower the bar to your lower chest.
+Press up to full arm extension.
+! Use a spotter; it's harder to bail out of a heavy decline rep.
+@Bench Press (Dumbbell)
+Sit with dumbbells on your thighs, then lie back and kick them up to chest height.
+Start with arms straight above your chest, palms facing forward.
+Lower until your upper arms are just below parallel with the bench.
+Press back up, bringing the dumbbells together without clanging them.
+! Dumbbells allow a bigger stretch than a bar — control the bottom position.
+@Incline Bench Press (Dumbbell)
+Set the bench to 30–45° and sit back with the dumbbells at your shoulders.
+Press them up until your arms are straight above your upper chest.
+Lower slowly until you feel a stretch across your chest.
+! Keep wrists stacked over elbows throughout.
+@Chest Press (Machine)
+Adjust the seat so the handles line up with the middle of your chest.
+Sit back with your shoulder blades against the pad and grip the handles.
+Press forward until your arms are almost straight.
+Return slowly until you feel a stretch, without letting the stack touch down.
+! Don't let your shoulders roll forward at the end of each rep.
+@Chest Fly (Dumbbell)
+Lie on a flat bench with dumbbells above your chest, palms facing each other and a slight bend in the elbows.
+Open your arms in a wide arc until you feel a deep chest stretch.
+Squeeze the dumbbells back together over your chest along the same arc.
+! Keep the elbow bend fixed — if it straightens and bends, it turns into a press.
+@Chest Fly (Machine)
+Set the seat so the handles are at chest height.
+Sit back with your chest up and grip the handles with a slight elbow bend.
+Bring the handles together in front of you and squeeze.
+Return slowly to a comfortable stretch.
+! Pause for a second at the squeeze for a better contraction.
+@Cable Crossover
+Set the pulleys high and stand in a split stance holding a handle in each hand.
+Lean slightly forward with a slight elbow bend.
+Sweep your hands down and together in front of your hips.
+Return slowly until your chest is stretched.
+! Move only at the shoulder — your elbows shouldn't bend more as you pull.
+@Push Up
+Start in a high plank, hands just wider than your shoulders, body in a straight line.
+Lower your chest to just above the floor, elbows about 45° from your body.
+Push the floor away until your arms are straight.
+! Squeeze your glutes and abs so your hips don't sag. Drop to your knees if needed.
+@Chest Dip
+Grip the parallel bars and lift yourself with arms straight.
+Lean your torso forward and let your legs hang or cross behind you.
+Lower until your upper arms are about parallel to the floor.
+Press back up to straight arms.
+! Leaning forward targets the chest; staying upright targets the triceps.
+@Deadlift (Barbell)
+Stand with the bar over mid-foot, feet hip-width apart.
+Hinge down and grip the bar just outside your legs. Chest up, back flat, shoulders over the bar.
+Brace your core and push the floor away, keeping the bar against your legs.
+Stand tall at the top, then lower by hinging at the hips first, then bending the knees.
+! Never round your lower back. If it rounds, reduce the weight.
+@Bent Over Row (Barbell)
+Hold the bar with an overhand grip and hinge forward until your torso is about 45° with a flat back.
+Let the bar hang below your knees with arms straight.
+Row the bar to your lower ribs, driving your elbows back.
+Lower with control.
+! Don't use momentum — keep your torso angle fixed.
+@Pull Up
+Hang from a bar with an overhand grip a little wider than your shoulders.
+Pull your shoulder blades down, then drive your elbows toward your hips.
+Pull until your chin clears the bar.
+Lower fully until your arms are straight.
+! Avoid kipping. Use a band or negatives if you can't do full reps yet.
+@Chin Up
+Hang from the bar with an underhand, shoulder-width grip.
+Pull yourself up until your chin is over the bar.
+Lower under control to a full hang.
+! Keep your chest up and think about pulling your elbows down to your sides.
+@Lat Pulldown (Cable)
+Sit with your thighs secured under the pads and grab the bar slightly wider than your shoulders.
+Lean back a few degrees with your chest up.
+Pull the bar to your upper chest, driving your elbows down.
+Let the bar rise slowly until your arms are straight.
+! Don't swing your torso or pull the bar behind your neck.
+@Seated Cable Row
+Sit with your feet on the plates and knees slightly bent, holding the handle with arms extended.
+Sit tall with your chest up.
+Pull the handle to your lower stomach, squeezing your shoulder blades together.
+Return slowly, letting your shoulders stretch forward slightly.
+! Keep your torso mostly still; don't rock back to move the weight.
+@One Arm Row (Dumbbell)
+Place one knee and the same-side hand on a bench, other foot on the floor.
+Hold a dumbbell with your free hand, arm hanging straight.
+Row the dumbbell toward your hip, keeping your elbow close to your body.
+Lower slowly to a full stretch.
+! Keep your back flat and hips square — don't twist as you pull.
+@T-Bar Row
+Straddle the bar, hinge forward with a flat back and grab the handle.
+Pull the weight toward your chest, driving your elbows back.
+Squeeze your shoulder blades together at the top.
+Lower under control.
+! Keep your head neutral — look at the floor a little ahead of you.
+@Straight Arm Pulldown
+Stand facing a high cable with a bar or rope, arms straight, slight hinge at the hips.
+Keeping your arms nearly straight, sweep the bar down to your thighs.
+Pause and feel your lats squeeze.
+Return slowly overhead.
+! Move from your shoulders, not your elbows.
+@Back Extension
+Set the pad at hip level on a back extension bench with feet secured.
+Cross your arms and keep your body straight from head to heels.
+Lower your torso by hinging at the hips.
+Raise back up until your body is in a straight line.
+! Stop at a straight line — leaning back past it just stresses the lower back.
+@Overhead Press (Barbell)
+Hold the bar at your collarbone with a grip just outside your shoulders.
+Brace your core and squeeze your glutes.
+Press the bar straight up, moving your head back slightly then through as it passes.
+Lock out overhead, then lower back to your collarbone.
+! Don't lean back — keep ribs down and glutes tight.
+@Shoulder Press (Dumbbell)
+Sit or stand with the dumbbells at shoulder height, palms facing forward.
+Press up until your arms are straight above you.
+Lower back to ear level under control.
+! Keep your core tight so your lower back doesn't arch.
+@Arnold Press
+Start with dumbbells in front of your shoulders, palms facing you.
+Press up while rotating your palms to face forward.
+Finish with arms straight overhead.
+Reverse the rotation as you lower.
+! Use lighter weights than a normal press — the rotation makes it harder.
+@Lateral Raise (Dumbbell)
+Stand with a dumbbell in each hand at your sides and a slight elbow bend.
+Raise your arms out to the sides until they're about shoulder height.
+Lower slowly.
+! Lead with your elbows and don't shrug. Light weight with strict form works best.
+@Lateral Raise (Cable)
+Stand side-on to a low cable and grab the handle with the far hand.
+Raise your arm out to the side to shoulder height.
+Lower slowly against the cable's tension.
+! The cable keeps constant tension at the bottom, so don't rest between reps.
+@Front Raise (Dumbbell)
+Stand holding dumbbells in front of your thighs.
+Raise one or both arms straight in front of you to shoulder height.
+Lower under control.
+! Don't swing your body — if you need to, the weight is too heavy.
+@Rear Delt Fly (Dumbbell)
+Hinge forward at the hips with a flat back, dumbbells hanging below your chest.
+With a slight elbow bend, raise your arms out to the sides.
+Squeeze your shoulder blades together at the top.
+Lower slowly.
+! Use light weights — the rear delts are small.
+@Reverse Fly (Machine)
+Sit facing the pad with your chest against it and grab the handles.
+Pull the handles out and back in a wide arc, keeping your arms almost straight.
+Squeeze your shoulder blades together.
+Return slowly.
+! Keep your shoulders down — don't shrug.
+@Face Pull
+Set a rope at upper-chest to face height.
+Pull the rope toward your face, splitting the ends apart by your ears.
+Squeeze your shoulder blades together and hold briefly.
+Return slowly.
+! Great for shoulder health. Use light weight and high reps.
+@Upright Row
+Hold a bar or dumbbells in front of your thighs with a shoulder-width grip.
+Pull straight up along your body, leading with your elbows.
+Stop around chest height.
+Lower slowly.
+! Keep the grip wide and don't lift elbows far above your shoulders if it pinches.
+@Shrug (Dumbbell)
+Stand holding dumbbells at your sides.
+Lift your shoulders straight up toward your ears.
+Hold for a second, then lower slowly.
+! Don't roll your shoulders — just straight up and down.
+@Shrug (Barbell)
+Hold a barbell in front of your thighs with an overhand grip.
+Shrug your shoulders straight up as high as you can.
+Hold briefly, then lower slowly.
+! Keep your arms straight — the movement comes from the traps, not the biceps.
+@Bicep Curl (Barbell)
+Stand holding a barbell with an underhand shoulder-width grip.
+Keep your elbows pinned to your sides and curl the bar up to shoulder height.
+Squeeze, then lower slowly to full arm extension.
+! Don't swing your back to move the bar.
+@Bicep Curl (Dumbbell)
+Stand with a dumbbell in each hand, palms facing forward.
+Curl the weights up while keeping your elbows by your sides.
+Squeeze at the top and lower slowly.
+! Alternate arms or do both together — either works.
+@Hammer Curl
+Hold dumbbells with palms facing each other.
+Curl up without rotating your wrists, elbows tucked in.
+Lower slowly.
+! Hits the brachialis and forearms as well as the biceps.
+@Preacher Curl
+Sit at a preacher bench with your upper arms resting flat on the pad.
+Curl the bar or dumbbells up toward your shoulders.
+Lower slowly until your arms are almost straight.
+! Don't fully lock out at the bottom with heavy weight — that stresses the elbow.
+@Incline Curl
+Sit back on an incline bench (about 60°) with dumbbells hanging at your sides.
+Curl up without moving your upper arms forward.
+Lower slowly to a full stretch.
+! The stretched position at the bottom is where this exercise shines.
+@Cable Curl
+Stand facing a low cable with a bar or rope attachment.
+Curl the handle up, keeping your elbows by your sides.
+Squeeze at the top and lower slowly.
+! The cable keeps tension on the biceps through the whole rep.
+@Concentration Curl
+Sit on a bench with your elbow braced against your inner thigh.
+Curl the dumbbell up toward your shoulder.
+Squeeze, then lower under control.
+! Slow and strict — don't lean back to help.
+@Triceps Pushdown (Cable)
+Stand facing a high cable with a bar or rope, elbows pinned to your sides.
+Push down until your arms are fully straight.
+Return until your forearms are just past parallel with the floor.
+! Don't let your elbows drift forward or flare out.
+@Skullcrusher (Barbell)
+Lie on a bench holding a bar (or EZ-bar) above your chest with straight arms.
+Bend only your elbows to lower the bar toward your forehead or just behind your head.
+Extend your arms back up.
+! Keep your upper arms vertical and still. Use a spotter for heavier weights.
+@Overhead Triceps Extension
+Hold a dumbbell or cable handle overhead with both hands, elbows pointing forward.
+Lower the weight behind your head by bending your elbows.
+Extend back up until your arms are straight.
+! Keep your elbows close to your ears and your core tight.
+@Close Grip Bench Press
+Lie on a bench and grip the bar about shoulder-width apart.
+Lower the bar to your lower chest with your elbows tucked close.
+Press up until your arms are straight.
+! Don't go much narrower than shoulder width — it strains the wrists.
+@Triceps Dip
+Support yourself on parallel bars with straight arms, torso upright.
+Lower until your upper arms are about parallel with the floor, elbows pointing back.
+Press back up to straight arms.
+! Staying upright keeps the focus on your triceps rather than your chest.
+@Bench Dip
+Sit on the edge of a bench with hands beside your hips, then slide your hips off the front.
+Lower your body by bending your elbows to about 90°.
+Press back up to straight arms.
+! Keep your hips close to the bench. Bend your knees to make it easier.
+@Triceps Kickback
+Hinge forward with a flat back and your upper arm parallel to the floor, holding a dumbbell.
+Extend your elbow to straighten your arm behind you.
+Squeeze, then bring it back slowly.
+! Keep your upper arm still — only your forearm moves.
+@Squat (Barbell)
+Set the bar on your upper back, feet shoulder-width apart, toes slightly out.
+Brace your core, take a big breath, and sit down and back.
+Lower until your thighs are at least parallel to the floor, knees tracking over your toes.
+Drive up through your whole foot to stand tall.
+! Keep your chest up and the bar over mid-foot. Use safety bars in a rack.
+@Front Squat
+Rest the bar on your front shoulders, elbows high, upper arms parallel to the floor.
+Squat down while keeping your torso as upright as possible.
+Drive up through your feet to stand.
+! If the elbows drop, the bar rolls forward — keep them high.
+@Leg Press
+Sit in the machine with your feet shoulder-width apart in the middle of the platform.
+Release the safety and lower the platform until your knees are about 90°.
+Press back up without locking your knees.
+! Keep your lower back and hips flat against the seat the whole time.
+@Leg Extension
+Sit in the machine with the pad on your lower shins and knees lined up with the pivot.
+Extend your legs until they are straight.
+Squeeze your quads, then lower slowly.
+! Control the lowering — don't let the weight crash down.
+@Hack Squat
+Position your shoulders under the pads with feet shoulder-width on the platform.
+Release the safety and lower until your knees reach about 90° or lower.
+Drive back up without locking out.
+! Placing your feet lower targets quads more; higher shifts work to glutes.
+@Goblet Squat
+Hold a dumbbell or kettlebell against your chest with both hands.
+Squat down between your knees, keeping your chest up.
+Stand back up by driving through your feet.
+! A great way to learn the squat pattern. Use your elbows to push your knees out.
+@Bulgarian Split Squat
+Stand a stride in front of a bench and rest the top of your back foot on it.
+Lower straight down until your front thigh is parallel to the floor.
+Drive through your front heel to stand.
+! Keep most of your weight on the front leg and your torso slightly forward.
+@Lunge (Dumbbell)
+Stand holding dumbbells at your sides.
+Step forward and lower until both knees are around 90°.
+Push off your front foot to return to the start.
+! Keep your front knee above your ankle, and your torso upright.
+@Walking Lunge
+Take a big step forward and lower your back knee toward the floor.
+Push through the front foot and bring your back leg through into the next step.
+Continue alternating legs as you walk forward.
+! Take long steps and keep your torso tall for better glute work.
+@Step Up
+Stand facing a bench or box with a dumbbell in each hand if desired.
+Place one foot fully on the box and drive through it to stand on top.
+Step back down under control and repeat.
+! Don't push off the back foot — let the lead leg do the work.
+@Romanian Deadlift
+Stand holding a bar or dumbbells in front of your thighs with a slight knee bend.
+Push your hips straight back, keeping the weight close to your legs.
+Lower until you feel a strong hamstring stretch, usually just below the knees.
+Drive your hips forward to stand tall.
+! Keep your back flat — this is a hip hinge, not a squat.
+@Stiff Leg Deadlift
+Stand holding a bar with your legs almost straight.
+Hinge at the hips and lower the bar down your legs.
+Stand back up by squeezing your glutes.
+! Stop when your lower back wants to round, even if the bar hasn't reached the floor.
+@Lying Leg Curl
+Lie face down on the machine with the pad just above your heels.
+Curl your heels toward your glutes.
+Squeeze, then lower slowly.
+! Keep your hips pressed into the bench.
+@Seated Leg Curl
+Sit in the machine with the pad on the back of your lower legs, thighs secured.
+Curl your heels down and back as far as you can.
+Return slowly to the start.
+! Keep your back against the pad and avoid jerking the weight.
+@Good Morning
+Place a light barbell on your upper back, feet shoulder-width apart, knees slightly bent.
+Hinge at the hips, pushing them back until your torso is almost parallel to the floor.
+Squeeze your glutes to return to standing.
+! Start very light — this exercise punishes poor form.
+@Glute Ham Raise
+Secure your feet in the GHD with your knees just behind the pad.
+Lower your torso toward the floor with a straight body.
+Curl back up using your hamstrings and glutes.
+! Cross your arms on your chest and keep your hips extended.
+@Hip Thrust (Barbell)
+Sit with your upper back against a bench and a padded barbell across your hips.
+Plant your feet and drive through your heels to lift your hips.
+Squeeze your glutes at the top until your torso is flat.
+Lower and repeat.
+! Tuck your chin and ribs down — don't over-arch your back at the top.
+@Glute Bridge
+Lie on your back with knees bent and feet flat on the floor.
+Drive through your heels to lift your hips until your body forms a straight line.
+Squeeze your glutes at the top, then lower.
+! Add a barbell or dumbbell on your hips once bodyweight feels easy.
+@Cable Kickback
+Attach an ankle strap to a low cable and face the machine, holding it for support.
+Kick your working leg straight back, squeezing your glute.
+Return slowly without letting the weight stack touch down.
+! Don't arch your lower back to get extra range of motion.
+@Hip Abduction (Machine)
+Sit in the machine with the pads on the outsides of your knees.
+Push your knees apart as far as is comfortable.
+Pause, then slowly bring them back together.
+! Leaning forward slightly puts more emphasis on the glutes.
+@Standing Calf Raise
+Stand on the edge of a platform with the balls of your feet and the pads on your shoulders.
+Lower your heels as far as possible for a deep stretch.
+Rise up onto your toes as high as you can and pause.
+! Go slow — pause at the top and bottom. No bouncing.
+@Seated Calf Raise
+Sit with your knees under the pad and the balls of your feet on the platform.
+Lower your heels for a stretch.
+Press up onto your toes and squeeze.
+! The bent knee targets the soleus, so use higher reps.
+@Calf Press
+Sit in the leg press and place the balls of your feet on the bottom of the platform.
+Press with your toes to extend your ankles.
+Lower your heels for a full stretch and repeat.
+! Keep your knees nearly straight but not locked.
+@Plank
+Rest on your forearms and toes with elbows directly under your shoulders.
+Keep your body in a straight line from head to heels.
+Squeeze your abs and glutes and breathe steadily.
+Hold for the target time.
+! If your hips sag or pike, end the set — quality over time.
+@Side Plank
+Lie on your side with your elbow under your shoulder.
+Lift your hips so your body is in a straight line from head to feet.
+Hold, then repeat on the other side.
+! Do both sides for balance. Log each side as a set, or just the weaker side.
+@Crunch
+Lie on your back with knees bent and hands by your temples.
+Curl your shoulders off the floor by contracting your abs.
+Lower slowly without resting your head.
+! Don't pull on your neck — the movement is small.
+@Sit Up
+Lie on your back with knees bent and feet flat.
+Curl all the way up until your chest meets your thighs.
+Lower slowly back down.
+! Cross your arms over your chest and avoid yanking with your neck.
+@Hanging Leg Raise
+Hang from a bar with straight arms.
+Raise your legs (bent or straight) until your hips curl up and your thighs reach parallel or higher.
+Lower slowly without swinging.
+! Tilt your pelvis up at the top — that's what works your abs, not just your hip flexors.
+@Cable Crunch
+Kneel under a high cable with a rope behind your head.
+Crunch down, bringing your elbows toward your thighs while rounding your spine.
+Return slowly.
+! Move your spine, not your hips — keep your hips still.
+@Russian Twist
+Sit with knees bent, lean back slightly, and lift your feet if you can.
+Rotate your torso to one side, then the other.
+Hold a weight to make it harder.
+! Turn from your ribcage, not just your arms.
+@Ab Wheel Rollout
+Kneel on a mat holding the wheel under your shoulders.
+Roll out slowly while keeping your abs tight and back flat.
+Roll back to the start by pulling with your abs.
+! Only go as far as you can without your lower back sagging.
+@Running
+Warm up with a few minutes of walking or an easy jog.
+Run at a pace where you can still speak in short sentences.
+Land softly with your feet under your hips and keep a relaxed upper body.
+Cool down with a few minutes of walking.
+! Build up distance gradually — add no more than 10% per week.
+@Walking
+Walk at a brisk pace where you're breathing harder but can still talk.
+Keep your head up, shoulders back and swing your arms.
+! Brisk walking is easy on joints and great for recovery days.
+@Cycling
+Set the saddle height so your knee is slightly bent at the bottom of the pedal stroke.
+Keep a steady cadence of around 70–90 rpm.
+Increase the resistance for harder intervals.
+! Keep your shoulders relaxed and your back straight.
+@Rowing Machine
+Start with your legs bent, arms straight, and shins vertical.
+Push through your legs first, then lean back slightly, and finally pull the handle to your lower ribs.
+Reverse the order to return: arms, then body, then knees.
+! About 60% of the power comes from your legs.
+@Stair Climber
+Stand tall and step steadily, placing your whole foot on each step.
+Use the handrails only for balance, not to hold your weight.
+! Leaning on the rails reduces the work you're doing.
+@Jump Rope
+Hold the handles at hip height with your elbows close to your sides.
+Turn the rope with your wrists and jump just high enough to clear it.
+Land softly on the balls of your feet.
+! Start with 30-second rounds and rest between them.
+`;
+const INFO={};(function(){let c=null;INFOTXT.split('\n').forEach(l=>{l=l.trim();if(!l)return;
+  if(l[0]==='@'){c=INFO[l.slice(1).trim()]={steps:[],tip:''}}else if(c&&l[0]==='!')c.tip=l.slice(1).trim();else if(c)c.steps.push(l)})})();
+
+/* ---------- preset workouts: [exercise name, sets, target] ---------- */
+const PRESETS=[
+{id:'p_push',name:'Push Day',desc:'Chest, shoulders & triceps',items:[['Bench Press (Barbell)',4,'6–10 reps'],['Incline Bench Press (Dumbbell)',3,'8–12 reps'],['Shoulder Press (Dumbbell)',3,'8–12 reps'],['Lateral Raise (Dumbbell)',3,'12–15 reps'],['Triceps Pushdown (Cable)',3,'10–15 reps'],['Overhead Triceps Extension',3,'10–15 reps']]},
+{id:'p_pull',name:'Pull Day',desc:'Back & biceps',items:[['Lat Pulldown (Cable)',4,'8–12 reps'],['Bent Over Row (Barbell)',4,'6–10 reps'],['Seated Cable Row',3,'10–12 reps'],['Face Pull',3,'12–15 reps'],['Bicep Curl (Barbell)',3,'8–12 reps'],['Hammer Curl',3,'10–12 reps']]},
+{id:'p_legs',name:'Leg Day',desc:'Quads, hamstrings, glutes & calves',items:[['Squat (Barbell)',4,'6–10 reps'],['Romanian Deadlift',3,'8–10 reps'],['Leg Press',3,'10–12 reps'],['Lying Leg Curl',3,'10–12 reps'],['Leg Extension',3,'12–15 reps'],['Standing Calf Raise',4,'12–15 reps']]},
+{id:'p_upper',name:'Upper Body',desc:'Chest, back, shoulders & arms',items:[['Bench Press (Barbell)',3,'6–10 reps'],['Bent Over Row (Barbell)',3,'6–10 reps'],['Overhead Press (Barbell)',3,'8–10 reps'],['Lat Pulldown (Cable)',3,'8–12 reps'],['Bicep Curl (Dumbbell)',2,'10–12 reps'],['Triceps Pushdown (Cable)',2,'10–12 reps']]},
+{id:'p_lower',name:'Lower Body',desc:'Legs, glutes & core',items:[['Deadlift (Barbell)',3,'5 reps'],['Bulgarian Split Squat',3,'8–10 reps'],['Hip Thrust (Barbell)',3,'8–12 reps'],['Seated Leg Curl',3,'10–12 reps'],['Seated Calf Raise',3,'12–15 reps'],['Plank',3,'45–60 sec']]},
+{id:'p_fb_a',name:'Full Body A',desc:'Beginner-friendly, 3 days a week',items:[['Squat (Barbell)',3,'8–10 reps'],['Bench Press (Dumbbell)',3,'8–10 reps'],['Seated Cable Row',3,'8–12 reps'],['Shoulder Press (Dumbbell)',2,'10–12 reps'],['Plank',3,'30–45 sec']]},
+{id:'p_fb_b',name:'Full Body B',desc:'Alternate with Full Body A',items:[['Romanian Deadlift',3,'8–10 reps'],['Incline Bench Press (Dumbbell)',3,'8–12 reps'],['Lat Pulldown (Cable)',3,'8–12 reps'],['Goblet Squat',3,'10–12 reps'],['Lateral Raise (Dumbbell)',2,'12–15 reps'],['Crunch',3,'12–15 reps']]},
+{id:'p_55a',name:'Strength 5×5 – A',desc:'Heavy compound lifts, alternate with B',items:[['Squat (Barbell)',5,'5 reps'],['Bench Press (Barbell)',5,'5 reps'],['Bent Over Row (Barbell)',5,'5 reps']]},
+{id:'p_55b',name:'Strength 5×5 – B',desc:'Heavy compound lifts, alternate with A',items:[['Squat (Barbell)',5,'5 reps'],['Overhead Press (Barbell)',5,'5 reps'],['Deadlift (Barbell)',1,'5 reps']]},
+{id:'p_arms',name:'Arm Day',desc:'Biceps & triceps',items:[['Close Grip Bench Press',3,'8–10 reps'],['Bicep Curl (Barbell)',3,'8–12 reps'],['Skullcrusher (Barbell)',3,'10–12 reps'],['Incline Curl',3,'10–12 reps'],['Triceps Pushdown (Cable)',3,'12–15 reps'],['Hammer Curl',3,'10–12 reps']]},
+{id:'p_core',name:'Core Blast',desc:'Abs & obliques',items:[['Plank',3,'45–60 sec'],['Hanging Leg Raise',3,'8–12 reps'],['Cable Crunch',3,'12–15 reps'],['Russian Twist',3,'20 reps'],['Ab Wheel Rollout',3,'8–10 reps'],['Side Plank',2,'30 sec each side']]},
+{id:'p_home',name:'Bodyweight at Home',desc:'No equipment needed',items:[['Push Up',4,'max reps'],['Bench Dip',3,'10–15 reps'],['Back Extension',3,'12–15 reps'],['Crunch',3,'15–20 reps'],['Plank',3,'30–60 sec'],['Side Plank',2,'30 sec each side']]}
+];
+/* resolve to exercise ids and drop any exercise missing from a user's library */
+function presetItems(p){return p.items.map(([n,s,t])=>({exId:'s_'+slug(n),sets:s,target:t})).filter(i=>S.exercises.some(e=>e.id===i.exId))}
+
 const ui={tab:'workout',exq:'',exm:'All',statEx:'',pk:null,rt:null,ex:null};
 
 /* ---------- helpers ---------- */
@@ -277,13 +750,19 @@ function itemHTML(it,i){
     <div class="srow head" style="grid-template-columns:${setCols(t)}">${head}</div>${rows}
     <button class="btn ghost" style="width:100%;margin-top:6px" data-act="addSet" data-i="${i}">+ Add Set</button></section>`}
 
+function presetsHTML(compact){
+  return PRESETS.map(p=>{const its=presetItems(p);if(!its.length)return '';
+    return `<div class="card"><div class="row-b"><div><div class="pname">${esc(p.name)}</div><div class="muted sm">${esc(p.desc)} · ${its.length} exercises</div></div><button class="btn sm acc" data-act="startPreset" data-id="${p.id}">Start</button></div>
+    ${compact?'':`<div style="margin:8px 0 10px">${its.map(i=>`<div class="pitem"><span data-act="exInfo" data-id="${i.exId}">${i.sets}× ${esc(exById(i.exId).name)}</span><span>${esc(i.target)}</span></div>`).join('')}</div>
+    <button class="btn sm ghost" data-act="savePreset" data-id="${p.id}">Save to my routines</button>`}</div>`}).join('')}
 function vWorkout(){
   const A=S.active;
   if(!A){
     const wk=S.workouts.filter(w=>w.start>=weekStart(Date.now())).length;
     return `<h1>Workout</h1><button class="btn big" data-act="startEmpty">Start Empty Workout</button>
     <p class="muted sm">${wk} workout${wk===1?'':'s'} this week · ${S.workouts.length} total</p>
-    <h2>My Routines</h2>${S.routines.length?S.routines.map(r=>`<div class="card"><div class="row-b"><div><b>${esc(r.name)}</b><div class="muted sm">${esc(r.items.map(i=>exById(i.exId).name).join(', '))}</div></div><button class="btn sm acc" data-act="startRoutine" data-id="${r.id}">Start</button></div></div>`).join(''):'<p class="muted">No routines yet. Create one in the Routines tab, or finish a workout and save it as a routine.</p>'}`}
+    <h2>My Routines</h2>${S.routines.length?S.routines.map(r=>`<div class="card"><div class="row-b"><div><b>${esc(r.name)}</b><div class="muted sm">${esc(r.items.map(i=>exById(i.exId).name).join(', '))}</div></div><button class="btn sm acc" data-act="startRoutine" data-id="${r.id}">Start</button></div></div>`).join(''):'<p class="muted">No routines yet. Create one in the Routines tab, or finish a workout and save it as a routine.</p>'}
+    <h2>Preset Workouts <span class="sm">· <span data-act="tab" data-t="routines" style="color:var(--acc);cursor:pointer">see details</span></span></h2>${presetsHTML(true)}`}
   let vol=0,sets=0;A.items.forEach(it=>{const t=exById(it.exId).type;it.sets.forEach(s=>{if(s.done){sets++;if(t==='wr')vol+=(s.w||0)*(s.r||0)}})});
   return `<div class="row-b"><input class="title" data-f="wname" value="${esc(A.name)}"><button class="btn sm acc" data-act="finish">Finish</button></div>
   <div class="stats3"><div><small>Duration</small><b id="elapsed">${fmtDur(Date.now()-A.start)}</b></div><div><small>Volume</small><b>${fmtVol(vol)}</b></div><div><small>Sets</small><b>${sets}</b></div></div>
@@ -295,7 +774,8 @@ function vRoutines(){
   return `<div class="row-b"><h1>Routines</h1><button class="btn sm acc" data-act="newRoutine">+ New</button></div>
   ${S.routines.length?S.routines.map(r=>`<div class="card"><b>${esc(r.name)}</b>
     <div class="muted sm" style="margin:4px 0 10px">${r.items.map(i=>`${i.sets}× ${esc(exById(i.exId).name)}`).join('<br>')||'Empty'}</div>
-    <div class="row-b"><button class="btn sm acc" data-act="startRoutine" data-id="${r.id}">Start</button><span><button class="btn sm" data-act="editRoutine" data-id="${r.id}">Edit</button> <button class="btn sm" data-act="delRoutine" data-id="${r.id}">🗑</button></span></div></div>`).join(''):'<p class="muted">Build a routine once, start it in one tap every session.</p>'}`}
+    <div class="row-b"><button class="btn sm acc" data-act="startRoutine" data-id="${r.id}">Start</button><span><button class="btn sm" data-act="editRoutine" data-id="${r.id}">Edit</button> <button class="btn sm" data-act="delRoutine" data-id="${r.id}">🗑</button></span></div></div>`).join(''):'<p class="muted">Build a routine once, start it in one tap every session.</p>'}
+  <h2>Preset workouts</h2><p class="muted sm" style="margin:0 0 4px">Ready-made sessions. Tap an exercise to see how to do it, or save a copy to edit.</p>${presetsHTML(false)}`}
 
 function exListHTML(){
   const q=ui.exq.trim().toLowerCase();
@@ -340,7 +820,7 @@ function vStats(){
   <div class="grid2"><button class="btn" data-act="exportJson">Export backup</button><button class="btn" data-act="exportCsv">Export CSV</button></div>
   <button class="btn" style="width:100%;margin-top:8px" data-act="importJson">Import backup</button>
   <button class="btn danger" style="width:100%;margin-top:14px" data-act="resetAll">Erase all data</button></div>
-  <p class="muted sm" style="text-align:center">IronLog · free, offline, no account, no subscription</p>`}
+  <p class="muted sm" style="text-align:center">Workout Tracker · free, offline, no account, no subscription</p>`}
 
 const NAV=[['workout','🏋️','Workout'],['routines','📋','Routines'],['exercises','📚','Exercises'],['history','🕘','History'],['stats','📈','Stats']];
 function render(){
@@ -366,6 +846,8 @@ function exEditor(id,fromPicker){
   <label class="lb">Muscle group</label><select data-f="exmuscle">${MUSCLES.map(m=>`<option ${m===e.muscle?'selected':''}>${m}</option>`).join('')}</select>
   <label class="lb">Type</label><select data-f="extype">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${k===e.type?'selected':''}>${v}</option>`).join('')}</select>
   <button class="btn big" data-act="saveEx">Save</button>`,fromPicker?2:1)}
+function howTo(ex){const i=!ex.custom&&INFO[ex.name];if(!i)return '';
+  return `<h2>How to do it</h2><div class="card"><ol class="how">${i.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>${i.tip?`<div class="tip">💡 ${esc(i.tip)}</div>`:''}</div>`}
 function exDetail(id){
   const ex=exById(id),h=exHistory(id);
   let rec='';
@@ -375,7 +857,7 @@ function exDetail(id){
     else rec=`<div class="grid2"><div class="kv"><small>Best</small><b>${Math.max(...h.map(x=>x.maxR))} ${ex.type==='time'?'sec':'reps'}</b></div><div class="kv"><small>Sessions</small><b>${h.length}</b></div></div>`}
   const pts=h.map(x=>({x:x.t,y:ex.type==='wr'?dw(x.best1):x.maxR}));
   return `<div class="row-b"><h1 style="margin:0">${esc(ex.name)}</h1><button class="btn sm" data-act="close1">Close</button></div><div class="muted">${esc(ex.muscle)} · ${TYPES[ex.type]}</div>
-  <h2>Records</h2>${rec||'<p class="muted">No history yet.</p>'}<h2>Progress</h2><div class="card">${lineChart(pts,v=>Math.round(v*10)/10)}</div>
+  ${howTo(ex)}<h2>Records</h2>${rec||'<p class="muted">No history yet.</p>'}<h2>Progress</h2><div class="card">${lineChart(pts,v=>Math.round(v*10)/10)}</div>
   <h2>Recent sessions</h2>${h.slice(-5).reverse().map(x=>`<div class="li"><span>${fmtDate(x.t)}</span><span class="sm">${x.sets.map(s=>ex.type==='wr'?`${dw(s.w)}×${s.r}`:s.r).join(', ')}</span></div>`).join('')||'<p class="muted">–</p>'}
   ${ex.custom?`<div class="grid2" style="margin-top:14px"><button class="btn" data-act="editEx" data-id="${id}">Edit</button><button class="btn danger" data-act="delEx" data-id="${id}">Delete</button></div>`:''}`}
 
@@ -421,6 +903,11 @@ const ACT={
   startRoutine(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;
     const r=S.routines.find(x=>x.id===t.dataset.id);if(!r)return;
     startWorkout(r.items.map(i=>({id:uid(),exId:i.exId,sets:Array.from({length:i.sets},blank)})),r.name)},
+  startPreset(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;
+    const p=PRESETS.find(x=>x.id===t.dataset.id);if(!p)return;
+    startWorkout(presetItems(p).map(i=>({id:uid(),exId:i.exId,sets:Array.from({length:i.sets},blank)})),p.name)},
+  savePreset(t){const p=PRESETS.find(x=>x.id===t.dataset.id);if(!p)return;
+    S.routines.push({id:uid(),name:p.name,items:presetItems(p).map(i=>({exId:i.exId,sets:i.sets}))});save();render();toast(p.name+' saved to your routines')},
   addEx(){openPicker(ids=>{ids.forEach(id=>S.active.items.push({id:uid(),exId:id,sets:[blank()]}));save();render()})},
   addSet(t){const it=S.active.items[+t.dataset.i];it.sets.push(blank());save();render()},
   delSet(t){const it=S.active.items[+t.dataset.i];it.sets.splice(+t.dataset.s,1);save();render()},
@@ -487,10 +974,10 @@ const ACT={
     S.routines.push({id:uid(),name:n.trim(),items:w.items.map(i=>({exId:i.exId,sets:i.sets.length}))});save();toast('Routine saved')},
   /* settings */
   unit(t){S.settings.unit=t.dataset.u;save();render()},
-  exportJson(){download(`ironlog-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(S,null,1),'application/json')},
+  exportJson(){download(`workout-tracker-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(S,null,1),'application/json')},
   exportCsv(){const rows=[['date','workout','exercise','set','weight_kg','reps_or_seconds']];
     chrono().forEach(w=>w.items.forEach(it=>it.sets.forEach((s,j)=>rows.push([new Date(w.start).toISOString(),w.name,exById(it.exId).name,j+1,s.w||0,s.r||0]))));
-    download('ironlog-workouts.csv',rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv')},
+    download('workout-tracker-workouts.csv',rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv')},
   importJson(){$('#file').click()},
   resetAll(){if(confirm('Erase ALL workouts, routines and custom exercises? This cannot be undone.')&&confirm('Really erase everything?')){S=fresh();save();render()}}
 };
@@ -510,7 +997,7 @@ document.addEventListener('change',e=>{const t=e.target,f=t.dataset&&t.dataset.f
 $('#file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d.exercises)||!Array.isArray(d.workouts))throw 0;
     if(!confirm(`Replace current data with this backup (${d.workouts.length} workouts)?`))return;
-    S=Object.assign(fresh(),d);S.settings=Object.assign({unit:'kg',rest:90},d.settings);save();render();toast('Backup imported')}catch(err){toast('That is not a valid IronLog backup')}};
+    S=Object.assign(fresh(),d);S.settings=Object.assign({unit:'kg',rest:90},d.settings);save();render();toast('Backup imported')}catch(err){toast('That is not a valid Workout Tracker backup')}};
   rd.readAsText(f);e.target.value=''});
 
 /* ---------- init ---------- */

@@ -1,10 +1,12 @@
-# IronLog — free Hevy-style workout tracker
+# Workout Tracker — free Hevy-style workout tracker
 
 Offline, no account, no ads, no subscription. All data stays on your device.
 
 ## Features
 - Live workout logging: sets, reps, weight, previous-session hints (tap to copy), rest timer with vibrate/beep, screen stays awake
 - Bodyweight and timed exercises, plus 100+ built-in exercises and your own custom ones
+- 12 preset workouts (Push/Pull/Legs, Upper/Lower, Full Body, 5×5, Arms, Core, Bodyweight) you can start in one tap or save to your routines
+- Step-by-step instructions and form tips on every built-in exercise's page
 - Routines: build once, start in one tap; save any workout as a routine
 - History with repeat / delete, personal-record detection on finish
 - Stats: workouts per week, estimated 1RM progress charts, PR list
@@ -32,7 +34,7 @@ Produces `app-release-signed.apk`.
 **Option C – Capacitor (bundles the files inside the APK, no hosting)**
 ```
 npm init -y && npm i @capacitor/core @capacitor/cli @capacitor/android
-npx cap init IronLog com.example.ironlog --web-dir www
+npx cap init "Workout Tracker" com.example.workouttracker --web-dir www
 mkdir www && cp index.html manifest.webmanifest sw.js icon-*.png www/
 npx cap add android && npx cap sync
 npx cap open android   # Build > Build APK(s) in Android Studio
