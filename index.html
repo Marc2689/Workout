@@ -67,6 +67,8 @@ svg.chart{width:100%;height:auto;display:block}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(130px + var(--safe));background:#000c;padding:10px 16px;border-radius:99px;z-index:50;display:none;font-size:14px}
 label.lb{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .pr{color:#ffd23f;font-weight:600}
+.exrest{margin:0 0 6px}.exrest button{padding:4px 12px}
+.animal{text-align:center;background:var(--card);border-radius:14px;padding:14px;margin:12px 0}.animal .big{font-size:76px;line-height:1.15}
 .how{margin:0;padding-left:20px}.how li{margin:6px 0}
 .tip{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,107,53,.12);font-size:14px}
 .pname{font-weight:700}.pitem{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:13px;color:var(--mut)}.pitem span:first-child{cursor:pointer;text-decoration:underline dotted}
@@ -197,8 +199,8 @@ function seedExercises(){const out=[];let m='Other';
 
 /* ---------- state ---------- */
 const KEY='ironlog.v1'; /* unchanged on purpose so existing saved data keeps loading */
-const fresh=()=>({exercises:seedExercises(),routines:[],workouts:[],active:null,settings:{unit:'kg',rest:90}});
-function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.exercises)&&Array.isArray(d.workouts)){d.routines=d.routines||[];d.settings=Object.assign({unit:'kg',rest:90},d.settings);return d}}catch(e){}return fresh()}
+const fresh=()=>({exercises:seedExercises(),routines:[],workouts:[],active:null,settings:{unit:'kg',rest:90},restByEx:{}});
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.exercises)&&Array.isArray(d.workouts)){d.routines=d.routines||[];d.restByEx=d.restByEx||{};d.settings=Object.assign({unit:'kg',rest:90},d.settings);return d}}catch(e){}return fresh()}
 let S=load();
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save — storage full?')}}
 /* ---------- how-to instructions (built-in exercises) ---------- */
@@ -691,6 +693,18 @@ function workoutName(){const h=new Date().getHours();return (h<12?'Morning':h<17
 const blank=()=>({w:'',r:'',done:false});
 function volumeOf(items){let v=0;items.forEach(it=>{if(exById(it.exId).type==='wr')it.sets.forEach(s=>{if(s.done!==false)v+=(s.w||0)*(s.r||0)})});return v}
 
+/* ---------- animal comparisons: [emoji, singular, plural, kg] ---------- */
+const ANIMALS=[['🐇','rabbit','rabbits',2],['🐈','house cat','house cats',4.5],['🐕','Labrador','Labradors',30],['🐆','leopard','leopards',60],['🐑','sheep','sheep',80],['🐼','giant panda','giant pandas',110],['🦍','gorilla','gorillas',160],['🦁','lion','lions',190],['🐅','tiger','tigers',220],['🐻','grizzly bear','grizzly bears',300],['🐎','horse','horses',500],['🦬','bison','bison',900],['🦒','giraffe','giraffes',1200],['🦛','hippo','hippos',1500],['🦏','white rhino','white rhinos',2300],['🐋','orca','orcas',4500],['🐘','elephant','elephants',6000],['🐳','blue whale','blue whales',150000]];
+const ordinal=n=>{const v=n%100;return n+(['th','st','nd','rd'][(v-20)%10]||['th','st','nd','rd'][v]||'th')};
+function animalFor(kg){
+  if(!(kg>0))return null;
+  let a=ANIMALS[0];ANIMALS.forEach(x=>{if(kg>=x[3]*0.95)a=x});
+  const n=kg/a[3];
+  if(n<1.5)return {emoji:a[0],text:`about the weight of ${/^[aeiou]/i.test(a[1])?'an':'a'} ${a[1]}`};
+  const c=Math.round(n);return {emoji:a[0],text:`about the weight of ${c.toLocaleString()} ${c===1?a[1]:a[2]}`}}
+function animalCard(kg,label){const a=animalFor(kg);if(!a)return '';
+  return `<div class="animal"><div class="big">${a.emoji}</div><div><b>${esc(label)} ${fmtVol(kg)}</b></div><div class="muted">${esc(a.text)}</div></div>`}
+
 /* history helpers */
 function chrono(){return S.workouts.slice().sort((a,b)=>a.start-b.start)}
 function prevSets(exId,before){
@@ -747,6 +761,7 @@ function itemHTML(it,i){
       <button class="del" data-act="delSet" data-i="${i}" data-s="${j}">✕</button></div>`}).join('');
   return `<section class="card"><div class="exh"><span class="nm" data-act="exInfo" data-id="${ex.id}">${esc(ex.name)}</span>
     <button data-act="moveItem" data-i="${i}" data-d="-1">↑</button><button data-act="moveItem" data-i="${i}" data-d="1">↓</button><button data-act="delItem" data-i="${i}">🗑</button></div>
+    ${t==='time'?'':`<div class="row-b exrest"><span class="muted sm">⏱ Rest${S.restByEx&&S.restByEx[ex.id]!=null?'':' (default)'}</span><span><button data-act="exRest" data-id="${ex.id}" data-d="-15">−</button><b style="padding:0 8px;min-width:50px;display:inline-block;text-align:center">${fmtRest(restFor(ex.id))}</b><button data-act="exRest" data-id="${ex.id}" data-d="15">+</button>${S.restByEx&&S.restByEx[ex.id]!=null?`<button data-act="exRestReset" data-id="${ex.id}" title="Use default">↺</button>`:''}</span></div>`}
     <div class="srow head" style="grid-template-columns:${setCols(t)}">${head}</div>${rows}
     <button class="btn ghost" style="width:100%;margin-top:6px" data-act="addSet" data-i="${i}">+ Add Set</button></section>`}
 
@@ -755,6 +770,7 @@ function presetsHTML(compact){
     return `<div class="card"><div class="row-b"><div><div class="pname">${esc(p.name)}</div><div class="muted sm">${esc(p.desc)} · ${its.length} exercises</div></div><button class="btn sm acc" data-act="startPreset" data-id="${p.id}">Start</button></div>
     ${compact?'':`<div style="margin:8px 0 10px">${its.map(i=>`<div class="pitem"><span data-act="exInfo" data-id="${i.exId}">${i.sets}× ${esc(exById(i.exId).name)}</span><span>${esc(i.target)}</span></div>`).join('')}</div>
     <button class="btn sm ghost" data-act="savePreset" data-id="${p.id}">Save to my routines</button>`}</div>`}).join('')}
+const restFor=id=>{const v=S.restByEx&&S.restByEx[id];return v!=null?v:(+S.settings.rest||0)};
 const fmtRest=s=>s>0?`${Math.floor(s/60)}:${pad(s%60)}`:'Off';
 function vWorkout(){
   const A=S.active;
@@ -767,7 +783,7 @@ function vWorkout(){
   let vol=0,sets=0;A.items.forEach(it=>{const t=exById(it.exId).type;it.sets.forEach(s=>{if(s.done){sets++;if(t==='wr')vol+=(s.w||0)*(s.r||0)}})});
   return `<div class="row-b"><input class="title" data-f="wname" value="${esc(A.name)}"><button class="btn sm acc" data-act="finish">Finish</button></div>
   <div class="stats3"><div><small>Duration</small><b id="elapsed">${fmtDur(Date.now()-A.start)}</b></div><div><small>Volume</small><b>${fmtVol(vol)}</b></div><div><small>Sets</small><b>${sets}</b></div></div>
-  <div class="card row-b restset"><span>⏱ Rest timer <span class="muted sm">(after each set)</span></span><span><button data-act="restDef" data-d="-15">−</button><b style="padding:0 10px;min-width:54px;display:inline-block;text-align:center">${fmtRest(S.settings.rest)}</b><button data-act="restDef" data-d="15">+</button></span></div>
+  <div class="card row-b restset"><span>⏱ Default rest</span><span><button data-act="restDef" data-d="-15">−</button><b style="padding:0 10px;min-width:54px;display:inline-block;text-align:center">${fmtRest(S.settings.rest)}</b><button data-act="restDef" data-d="15">+</button></span></div>
   ${A.items.map(itemHTML).join('')}
   <button class="btn big" data-act="addEx">+ Add Exercise</button>
   <div class="row-b" style="margin-top:8px"><button class="btn ghost" data-act="saveAsRoutine">Save as routine</button><button class="btn danger" data-act="discard">Discard workout</button></div>`}
@@ -920,10 +936,12 @@ const ACT={
     if(!s.done){const p=prevSets(it.exId,A.start)[+t.dataset.s];
       if(s.r===''&&p&&p.r)s.r=p.r;if(ty==='wr'&&s.w===''&&p&&p.w!=null)s.w=p.w;
       if(s.r===''||(ty==='wr'&&s.w==='')){return toast(ty==='wr'?'Enter weight and reps first':'Enter a value first')}
-      s.done=true;const rest=+S.settings.rest||0;if(rest>0&&ty!=='time'){A.restEnd=Date.now()+rest*1000;A.restTotal=rest*1000}
+      s.done=true;const rest=restFor(it.exId);if(rest>0&&ty!=='time'){A.restEnd=Date.now()+rest*1000;A.restTotal=rest*1000}
       try{audio=audio||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
     }else s.done=false;
     save();render()},
+  exRest(t){const id=t.dataset.id;S.restByEx=S.restByEx||{};S.restByEx[id]=Math.max(0,Math.min(900,restFor(id)+ +t.dataset.d));save();render()},
+  exRestReset(t){if(S.restByEx)delete S.restByEx[t.dataset.id];save();render()},
   restDef(t){S.settings.rest=Math.max(0,Math.min(900,(+S.settings.rest||0)+ +t.dataset.d));save();render()},
   restMinus(){const A=S.active;if(A&&A.restEnd){A.restEnd-=15000;A.restTotal=Math.max(1000,(A.restTotal||0)-15000);save();updateRest()}},
   restPlus(){const A=S.active;if(A&&A.restEnd){A.restEnd+=15000;A.restTotal=(A.restTotal||0)+15000;save();updateRest()}},
@@ -943,7 +961,10 @@ const ACT={
       const nW=Math.max(...it.sets.map(s=>s.w||0)),n1=Math.max(...it.sets.map(s=>e1rm(s.w,s.r)));
       if(nW>oW)prs.push(`${ex.name}: heaviest set ${dw(nW)} ${U()}`);else if(n1>o1)prs.push(`${ex.name}: est. 1RM ${Math.round(dw(n1))} ${U()}`)});
     S.workouts.push(w);S.active=null;save();render();
-    sheet(`<h1>Workout complete 🎉</h1><div class="stats3"><div><small>Time</small><b>${fmtDur(w.end-w.start)}</b></div><div><small>Volume</small><b>${fmtVol(volumeOf(w.items))}</b></div><div><small>Sets</small><b>${w.items.reduce((a,i)=>a+i.sets.length,0)}</b></div></div>
+    const nTotal=S.workouts.length,nWeek=S.workouts.filter(x=>x.start>=weekStart(w.start)).length,vol=volumeOf(w.items),allVol=S.workouts.reduce((a,x)=>a+volumeOf(x.items),0);
+    sheet(`<h1>Workout complete 🎉</h1><p style="margin:0 0 10px"><b>That's your ${ordinal(nTotal)} workout</b> <span class="muted">· ${ordinal(nWeek)} this week</span></p><div class="stats3"><div><small>Time</small><b>${fmtDur(w.end-w.start)}</b></div><div><small>Volume</small><b>${fmtVol(volumeOf(w.items))}</b></div><div><small>Sets</small><b>${w.items.reduce((a,i)=>a+i.sets.length,0)}</b></div></div>
+    ${animalCard(vol,'You lifted')}
+    ${S.workouts.length>1&&allVol>vol?animalCard(allVol,'All-time total:'):''}
     ${prs.length?`<h2>New records</h2>${prs.map(p=>`<div class="li pr">🏆 ${esc(p)}</div>`).join('')}`:''}
     <button class="btn big" data-act="close1">Done</button>`)},
   /* routines */
@@ -1000,7 +1021,7 @@ document.addEventListener('change',e=>{const t=e.target,f=t.dataset&&t.dataset.f
 $('#file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
   rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d.exercises)||!Array.isArray(d.workouts))throw 0;
     if(!confirm(`Replace current data with this backup (${d.workouts.length} workouts)?`))return;
-    S=Object.assign(fresh(),d);S.settings=Object.assign({unit:'kg',rest:90},d.settings);save();render();toast('Backup imported')}catch(err){toast('That is not a valid Workout Tracker backup')}};
+    S=Object.assign(fresh(),d);S.settings=Object.assign({unit:'kg',rest:90},d.settings);S.restByEx=S.restByEx||{};save();render();toast('Backup imported')}catch(err){toast('That is not a valid Workout Tracker backup')}};
   rd.readAsText(f);e.target.value=''});
 
 /* ---------- init ---------- */
