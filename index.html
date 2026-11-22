@@ -73,6 +73,17 @@ label.lb{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
 .tip{margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,107,53,.12);font-size:14px}
 .pname{font-weight:700}.pitem{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:13px;color:var(--mut)}.pitem span:first-child{cursor:pointer;text-decoration:underline dotted}
 h2 .sm{font-weight:400}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dow{text-align:center;font-size:12px;color:var(--mut);padding:2px 0}
+.cd{aspect-ratio:1;border-radius:10px;background:var(--card);padding:0;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid transparent;color:var(--txt)}
+.cd.blank{background:transparent;pointer-events:none}
+.cd.has{background:rgba(255,107,53,.22);font-weight:700}
+.cd.today{border-color:var(--mut)}
+.cd.sel{outline:2px solid var(--acc);outline-offset:0}
+.cd .dots{display:flex;gap:2px;height:5px}.cd .dots i{width:5px;height:5px;border-radius:50%;background:var(--acc)}
+.calnav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px 0 10px}
+.calnav b{font-size:18px}.calnav button{padding:8px 14px}.calnav button[disabled]{opacity:.3}
+.tag{font-size:11px;padding:1px 6px;border-radius:6px;background:var(--card2);color:var(--mut);margin-left:6px}
 </style>
 </head>
 <body>
@@ -89,6 +100,7 @@ h2 .sm{font-weight:400}
 <div id="sheet2"></div>
 <div id="toast"></div>
 <input type="file" id="file" accept="application/json,.json" hidden>
+<input type="file" id="csvfile" accept=".csv,text/csv,text/plain" hidden>
 
 <script>
 'use strict';
@@ -671,7 +683,7 @@ const PRESETS=[
 /* resolve to exercise ids and drop any exercise missing from a user's library */
 function presetItems(p){return p.items.map(([n,s,t])=>({exId:'s_'+slug(n),sets:s,target:t})).filter(i=>S.exercises.some(e=>e.id===i.exId))}
 
-const ui={tab:'workout',exq:'',exm:'All',statEx:'',pk:null,rt:null,ex:null};
+const ui={hv:'cal',cal:null,calDay:null,tab:'workout',exq:'',exm:'All',statEx:'',pk:null,rt:null,ex:null};
 
 /* ---------- helpers ---------- */
 const $=(s,e=document)=>e.querySelector(s);
@@ -683,6 +695,8 @@ const tk=v=>{v=parseFloat(String(v).replace(',','.'));return isNaN(v)?'':(U()===
 const fmtVol=kg=>Math.round(dw(kg)||0).toLocaleString()+' '+U();
 const exById=id=>S.exercises.find(e=>e.id===id)||{id,name:'(deleted exercise)',muscle:'Other',type:'wr'};
 const pad=n=>String(n).padStart(2,'0');
+const fmtSec=s=>s>=60?`${Math.floor(s/60)}:${pad(Math.round(s%60))} min`:`${s} s`;
+const dkey=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
 function fmtDur(ms){const s=Math.max(0,Math.floor(ms/1000));const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h}h ${pad(m)}m`:`${m}m ${pad(s%60)}s`}
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
 const fmtDateY=t=>new Date(t).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'2-digit'});
@@ -691,7 +705,7 @@ function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';cl
 function weekStart(t){const d=new Date(t);d.setHours(0,0,0,0);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return d.getTime()}
 function workoutName(){const h=new Date().getHours();return (h<12?'Morning':h<17?'Afternoon':h<21?'Evening':'Night')+' Workout'}
 const blank=()=>({w:'',r:'',done:false});
-function volumeOf(items){let v=0;items.forEach(it=>{if(exById(it.exId).type==='wr')it.sets.forEach(s=>{if(s.done!==false)v+=(s.w||0)*(s.r||0)})});return v}
+function volumeOf(items){let v=0;items.forEach(it=>{if(exById(it.exId).type==='wr')it.sets.forEach(s=>{if(s.done!==false&&s.t!=='warmup')v+=(s.w||0)*(s.r||0)})});return v}
 
 /* ---------- animal comparisons: [emoji, singular, plural, kg] ---------- */
 const ANIMALS=[['🐇','rabbit','rabbits',2],['🐈','house cat','house cats',4.5],['🐕','Labrador','Labradors',30],['🐆','leopard','leopards',60],['🐑','sheep','sheep',80],['🐼','giant panda','giant pandas',110],['🦍','gorilla','gorillas',160],['🦁','lion','lions',190],['🐅','tiger','tigers',220],['🐻','grizzly bear','grizzly bears',300],['🐎','horse','horses',500],['🦬','bison','bison',900],['🦒','giraffe','giraffes',1200],['🦛','hippo','hippos',1500],['🦏','white rhino','white rhinos',2300],['🐋','orca','orcas',4500],['🐘','elephant','elephants',6000],['🐳','blue whale','blue whales',150000]];
@@ -710,10 +724,10 @@ function chrono(){return S.workouts.slice().sort((a,b)=>a.start-b.start)}
 function prevSets(exId,before){
   const list=S.workouts.filter(w=>(!before||w.start<=before)&&w.items.some(i=>i.exId===exId)).sort((a,b)=>b.start-a.start);
   if(!list.length)return [];
-  return list[0].items.filter(i=>i.exId===exId).flatMap(i=>i.sets)}
+  return list[0].items.filter(i=>i.exId===exId).flatMap(i=>i.sets).filter(s=>s.t!=='warmup')}
 function exHistory(id){
   const out=[];chrono().forEach(w=>{const its=w.items.filter(i=>i.exId===id);if(!its.length)return;
-    const sets=its.flatMap(i=>i.sets);
+    const sets=its.flatMap(i=>i.sets).filter(s=>s.t!=='warmup');if(!sets.length)return;
     out.push({t:w.start,sets,maxW:Math.max(0,...sets.map(s=>s.w||0)),best1:Math.max(0,...sets.map(s=>e1rm(s.w,s.r))),maxR:Math.max(0,...sets.map(s=>s.r||0)),vol:sets.reduce((a,s)=>a+(s.w||0)*(s.r||0),0)})});
   return out}
 
@@ -806,13 +820,33 @@ function vExercises(){
   <div id="exlist">${exListHTML()}</div>`}
 
 function summaryLines(w){return w.items.map(it=>{const ex=exById(it.exId);let best='';
-  if(ex.type==='wr'){const b=it.sets.slice().sort((a,b)=>e1rm(b.w,b.r)-e1rm(a.w,a.r))[0];best=b?`${dw(b.w)} ${U()} × ${b.r}`:''}
-  else if(ex.type==='time'){best=Math.max(0,...it.sets.map(s=>s.r||0))+' s'}else best=Math.max(0,...it.sets.map(s=>s.r||0))+' reps';
+  if(ex.type==='wr'){const b=it.sets.filter(s=>s.t!=='warmup').sort((a,b)=>e1rm(b.w,b.r)-e1rm(a.w,a.r))[0];best=b?`${dw(b.w)} ${U()} × ${b.r}`:''}
+  else if(ex.type==='time'){best=fmtSec(Math.max(0,...it.sets.map(s=>s.r||0)))}else best=Math.max(0,...it.sets.map(s=>s.r||0))+' reps';
   return `${it.sets.length} × ${esc(ex.name)} <span class="muted">— ${best}</span>`}).join('<br>')}
+function workoutCard(w){return `<div class="card" data-act="viewWorkout" data-id="${w.id}"><div class="row-b"><b>${esc(w.name)}</b><span class="muted sm">${fmtDate(w.start)}</span></div>
+  <div class="muted sm" style="margin:2px 0 8px">${fmtDur(w.end-w.start)} · ${fmtVol(volumeOf(w.items))} · ${w.items.reduce((a,i)=>a+i.sets.length,0)} sets</div><div class="sm">${summaryLines(w)}</div></div>`}
+function vCalendar(){
+  const now=new Date();if(!ui.cal)ui.cal={y:now.getFullYear(),m:now.getMonth()};
+  const {y,m}=ui.cal,first=new Date(y,m,1),lead=(first.getDay()+6)%7,days=new Date(y,m+1,0).getDate();
+  const by={};S.workouts.forEach(w=>{(by[dkey(w.start)]=by[dkey(w.start)]||[]).push(w)});
+  const today=dkey(Date.now()),isNow=y===now.getFullYear()&&m===now.getMonth();
+  let cells=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="dow">${d}</div>`).join('')+'<div class="cd blank"></div>'.repeat(lead);
+  let nAct=0;
+  for(let d=1;d<=days;d++){const k=`${y}-${pad(m+1)}-${pad(d)}`,ws=by[k]||[];if(ws.length)nAct++;
+    cells+=`<button class="cd${ws.length?' has':''}${k===today?' today':''}${k===ui.calDay?' sel':''}" data-act="calDay" data-k="${k}">${d}<span class="dots">${ws.slice(0,3).map(()=>'<i></i>').join('')}</span></button>`}
+  const mws=S.workouts.filter(w=>{const d=new Date(w.start);return d.getFullYear()===y&&d.getMonth()===m}).sort((a,b)=>b.start-a.start);
+  const dayWs=ui.calDay?(by[ui.calDay]||[]).slice().sort((a,b)=>b.start-a.start):null;
+  const title=first.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  let below;
+  if(dayWs){const [yy,mm,dd]=ui.calDay.split('-').map(Number);
+    below=`<h2>${new Date(yy,mm-1,dd).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}</h2>`+(dayWs.map(workoutCard).join('')||'<p class="muted">Rest day — no workout logged.</p>')}
+  else below=`<h2>${title} <span class="sm">· ${mws.length} workout${mws.length===1?'':'s'} on ${nAct} day${nAct===1?'':'s'} · ${fmtVol(mws.reduce((a,w)=>a+volumeOf(w.items),0))}</span></h2>`+(mws.map(workoutCard).join('')||'<p class="muted">No workouts this month.</p>');
+  return `<div class="calnav"><button data-act="calPrev">‹</button><div style="text-align:center"><b>${title}</b>${isNow?'':'<div><button class="btn sm ghost" style="margin-top:4px" data-act="calToday">Today</button></div>'}</div><button data-act="calNext" ${isNow?'disabled':''}>›</button></div>
+  <div class="cal">${cells}</div>${below}`}
 function vHistory(){
   const list=S.workouts.slice().sort((a,b)=>b.start-a.start);
-  return `<h1>History</h1>${list.map(w=>`<div class="card" data-act="viewWorkout" data-id="${w.id}"><div class="row-b"><b>${esc(w.name)}</b><span class="muted sm">${fmtDate(w.start)}</span></div>
-  <div class="muted sm" style="margin:2px 0 8px">${fmtDur(w.end-w.start)} · ${fmtVol(volumeOf(w.items))} · ${w.items.reduce((a,i)=>a+i.sets.length,0)} sets</div><div class="sm">${summaryLines(w)}</div></div>`).join('')||'<p class="muted">Finished workouts show up here.</p>'}`}
+  return `<h1>History</h1><div class="seg" style="margin-bottom:12px"><button class="${ui.hv!=='list'?'on':''}" data-act="hv" data-v="cal">📅 Calendar</button><button class="${ui.hv==='list'?'on':''}" data-act="hv" data-v="list">☰ All workouts</button></div>`
+  +(ui.hv==='list'?(list.map(workoutCard).join('')||'<p class="muted">Finished workouts show up here.</p>'):vCalendar())}
 
 function statExList(){return S.exercises.filter(e=>exHistory(e.id).length)}
 function statChart(){
@@ -837,6 +871,7 @@ function vStats(){
   <label class="lb">Your data lives only on this device. Back it up regularly.</label>
   <div class="grid2"><button class="btn" data-act="exportJson">Export backup</button><button class="btn" data-act="exportCsv">Export CSV</button></div>
   <button class="btn" style="width:100%;margin-top:8px" data-act="importJson">Import backup</button>
+  <button class="btn acc" style="width:100%;margin-top:8px" data-act="importCsv">Import workouts from Hevy CSV</button>
   <button class="btn danger" style="width:100%;margin-top:14px" data-act="resetAll">Erase all data</button></div>
   <p class="muted sm" style="text-align:center">Workout Tracker · free, offline, no account, no subscription</p>`}
 
@@ -884,7 +919,7 @@ function workoutDetail(id){
   const w=S.workouts.find(x=>x.id===id);if(!w)return '';
   return `<div class="row-b"><h1 style="margin:0">${esc(w.name)}</h1><button class="btn sm" data-act="close1">Close</button></div>
   <div class="muted sm">${fmtDate(w.start)} · ${fmtDur(w.end-w.start)} · ${fmtVol(volumeOf(w.items))}</div>
-  ${w.items.map(it=>{const ex=exById(it.exId);return `<div class="card"><b style="color:var(--acc)">${esc(ex.name)}</b>${it.sets.map((s,j)=>`<div class="li"><span class="muted">Set ${j+1}</span><span>${ex.type==='wr'?`${dw(s.w)} ${U()} × ${s.r}`:ex.type==='time'?s.r+' sec':s.r+' reps'}</span></div>`).join('')}</div>`}).join('')}
+  ${w.items.map(it=>{const ex=exById(it.exId);return `<div class="card"><b style="color:var(--acc)">${esc(ex.name)}</b>${it.note?`<div class="muted sm" style="margin:2px 0 4px">${esc(it.note)}</div>`:''}${it.sets.map((s,j)=>`<div class="li"><span class="muted">Set ${j+1}${s.t&&s.t!=='normal'?`<span class="tag">${esc(s.t)}</span>`:''}</span><span>${ex.type==='wr'?`${dw(s.w)} ${U()} × ${s.r}`:ex.type==='time'?fmtSec(s.r)+(s.d?` · ${s.d} mi`:''):s.r+' reps'}</span></div>`).join('')}</div>`}).join('')}
   <div class="grid2"><button class="btn" data-act="repeatWorkout" data-id="${id}">Repeat</button><button class="btn" data-act="wToRoutine" data-id="${id}">Save as routine</button></div>
   <button class="btn danger" style="width:100%;margin-top:10px" data-act="delWorkout" data-id="${id}">Delete workout</button>`}
 
@@ -1002,6 +1037,12 @@ const ACT={
   exportCsv(){const rows=[['date','workout','exercise','set','weight_kg','reps_or_seconds']];
     chrono().forEach(w=>w.items.forEach(it=>it.sets.forEach((s,j)=>rows.push([new Date(w.start).toISOString(),w.name,exById(it.exId).name,j+1,s.w||0,s.r||0]))));
     download('workout-tracker-workouts.csv',rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv')},
+  hv(t){ui.hv=t.dataset.v;render()},
+  calPrev(){const c=ui.cal;const d=new Date(c.y,c.m-1,1);ui.cal={y:d.getFullYear(),m:d.getMonth()};ui.calDay=null;render()},
+  calNext(){const c=ui.cal;const d=new Date(c.y,c.m+1,1);ui.cal={y:d.getFullYear(),m:d.getMonth()};ui.calDay=null;render()},
+  calToday(){ui.cal=null;ui.calDay=null;render()},
+  calDay(t){ui.calDay=ui.calDay===t.dataset.k?null:t.dataset.k;render()},
+  importCsv(){$('#csvfile').click()},
   importJson(){$('#file').click()},
   resetAll(){if(confirm('Erase ALL workouts, routines and custom exercises? This cannot be undone.')&&confirm('Really erase everything?')){S=fresh();save();render()}}
 };
@@ -1022,6 +1063,79 @@ $('#file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;
   rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d.exercises)||!Array.isArray(d.workouts))throw 0;
     if(!confirm(`Replace current data with this backup (${d.workouts.length} workouts)?`))return;
     S=Object.assign(fresh(),d);S.settings=Object.assign({unit:'kg',rest:90},d.settings);S.restByEx=S.restByEx||{};save();render();toast('Backup imported')}catch(err){toast('That is not a valid Workout Tracker backup')}};
+  rd.readAsText(f);e.target.value=''});
+
+/* ---------- Hevy / CSV import ---------- */
+function parseCSV(t){const rows=[];let r=[],c='',q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
+    else if(ch==='"')q=true;
+    else if(ch===','){r.push(c);c=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';rows.push(r);r=[]}
+    else c+=ch}
+  if(c!==''||r.length){r.push(c);rows.push(r)}return rows}
+const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseHevyDate(s){const m=/(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{4}),?\s+(\d{1,2}):(\d{2})/.exec(s||'');
+  if(m&&MONTHS[m[2].toLowerCase()]!=null)return new Date(+m[3],MONTHS[m[2].toLowerCase()],+m[1],+m[4],+m[5]).getTime();
+  const t=Date.parse(s);return isNaN(t)?null:t}
+const MUSCLE_RULES=[
+  ['Cardio',/treadmill|elliptical|running|stair|bike|cycling|rowing machine|walk|warm up|jump rope/],
+  ['Core',/crunch|plank|sit up|russian twist|pallof|dead bug|knee raise|leg raise|\bab\b|core|side bend/],
+  ['Shoulders',/lateral raise|shoulder|rear delt|reverse fly|face pull|overhead press|front raise|arnold|upright row|around the world/],
+  ['Hamstrings',/romanian|leg curl|hamstring|good morning|stiff leg/],
+  ['Glutes',/glute|hip thrust|hip abduction|hip adduction|kickback|bridge/],
+  ['Calves',/calf|calves/],
+  ['Quads',/squat|leg press|leg extension|lunge|step up|hack|lower body/],
+  ['Chest',/chest|bench|pec|push.?up|\bfly\b|dip/],
+  ['Triceps',/tricep|pushdown|skull/],
+  ['Biceps',/bicep|curl/],
+  ['Back',/pull.?up|chin.?up|pulldown|row|deadlift|traction|back extension|hyperextension|\blat\b/]];
+function guessMuscle(n){n=n.toLowerCase();for(const [m,re] of MUSCLE_RULES)if(re.test(n))return m;return 'Other'}
+function planHevyImport(text){
+  const rows=parseCSV(text.replace(/^﻿/,'')).filter(r=>r.some(c=>c.trim()!==''));
+  if(rows.length<2)throw new Error('empty');
+  const head=rows.shift().map(h=>h.trim().toLowerCase());
+  ['title','start_time','exercise_title'].forEach(h=>{if(head.indexOf(h)<0)throw new Error('missing '+h)});
+  const g=(r,n)=>{const i=head.indexOf(n);return i<0?'':(r[i]||'').trim()};
+  const wkg=r=>{const k=parseFloat(g(r,'weight_kg'));if(k>0)return k;const l=parseFloat(g(r,'weight_lbs'));return l>0?l/2.20462:0};
+  const dmi=r=>{const m=parseFloat(g(r,'distance_miles'));if(m>0)return m;const k=parseFloat(g(r,'distance_km'));return k>0?+(k/1.60934).toFixed(2):0};
+  const groups=new Map(),stat=new Map();
+  rows.forEach(r=>{const name=g(r,'exercise_title'),st=parseHevyDate(g(r,'start_time'));if(!name||st==null)return;
+    const title=g(r,'title')||'Workout',k=st+'|'+title;
+    let w=groups.get(k);if(!w){w={start:st,end:parseHevyDate(g(r,'end_time')),title,rows:[]};groups.set(k,w)}w.rows.push(r);
+    let x=stat.get(name.toLowerCase());if(!x){x={name,wt:0,reps:0,dur:0};stat.set(name.toLowerCase(),x)}
+    if(wkg(r)>0)x.wt++;if(parseFloat(g(r,'reps'))>0)x.reps++;if(parseFloat(g(r,'duration_seconds'))>0)x.dur++});
+  const byName=new Map(S.exercises.map(e=>[e.name.toLowerCase(),e])),ids=new Set(S.exercises.map(e=>e.id)),newEx=[];
+  const resolve=name=>{const k=name.toLowerCase();let e=byName.get(k);if(e)return e;
+    const x=stat.get(k)||{wt:0,reps:0,dur:0};
+    const type=(x.reps===0&&x.dur>0)?'time':x.wt?'wr':x.reps?'reps':'wr';
+    let id='h_'+slug(name);if(ids.has(id))id+='_'+uid();ids.add(id);
+    e={id,name,muscle:guessMuscle(name),type,custom:true};byName.set(k,e);newEx.push(e);return e};
+  const have=new Set(S.workouts.map(w=>w.id)),haveT=new Set(S.workouts.map(w=>w.start+'|'+w.name.toLowerCase()));
+  const workouts=[];let dupes=0;
+  groups.forEach(gp=>{const id='h_'+gp.start+'_'+slug(gp.title);
+    if(have.has(id)||haveT.has(gp.start+'|'+gp.title.toLowerCase())){dupes++;return}
+    const items=[];let cur=null,curName=null;
+    gp.rows.forEach(r=>{const name=g(r,'exercise_title'),ex=resolve(name);
+      if(!cur||curName!==name){cur={exId:ex.id,sets:[]};curName=name;items.push(cur)}
+      const note=g(r,'exercise_notes');if(note&&!cur.note)cur.note=note;
+      const dur=parseFloat(g(r,'duration_seconds'))||0,reps=parseFloat(g(r,'reps'))||0,dist=dmi(r);
+      const set={w:+wkg(r).toFixed(3),r:ex.type==='time'?dur:reps,i:parseInt(g(r,'set_index'),10)||0};
+      const ty=g(r,'set_type');if(ty&&ty!=='normal')set.t=ty;
+      if(dist>0)set.d=dist;
+      cur.sets.push(set)});
+    items.forEach(it=>{it.sets.sort((a,b)=>a.i-b.i);it.sets.forEach(s=>delete s.i)});
+    const end=(gp.end&&gp.end>gp.start)?gp.end:gp.start+45*6e4;
+    workouts.push({id,name:gp.title,start:gp.start,end,items})});
+  return {workouts,newEx,dupes}}
+$('#csvfile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{let plan;try{plan=planHevyImport(String(rd.result))}catch(err){return toast('That does not look like a Hevy workout CSV')}
+    const {workouts,newEx,dupes}=plan;
+    if(!workouts.length)return toast(dupes?`Nothing new — all ${dupes} workouts are already in the app`:'No workouts found in that file');
+    const ts=workouts.map(w=>w.start),sets=workouts.reduce((a,w)=>a+w.items.reduce((b,i)=>b+i.sets.length,0),0);
+    if(!confirm(`Import ${workouts.length} workouts (${sets} sets) from ${fmtDateY(Math.min(...ts))} to ${fmtDateY(Math.max(...ts))}?`+(newEx.length?`\n${newEx.length} new exercises will be added to your library.`:'')+(dupes?`\n${dupes} workouts already in the app will be skipped.`:'')+'\nYour existing data is kept.'))return;
+    S.exercises.push(...newEx);S.workouts.push(...workouts);save();ui.cal=null;ui.calDay=null;ui.hv='cal';ui.tab='history';render();window.scrollTo(0,0);
+    toast(`Imported ${workouts.length} workouts`)};
   rd.readAsText(f);e.target.value=''});
 
 /* ---------- init ---------- */
