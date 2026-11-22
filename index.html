@@ -38,6 +38,8 @@ button:active{opacity:.7}
 .srow{display:grid;gap:6px;align-items:center;margin:5px 0}
 .srow.head{font-size:12px;color:var(--mut);text-align:center}
 .srow .sn{text-align:center;color:var(--mut);font-weight:600}
+.srow button.sn{background:var(--card2);padding:8px 0;color:var(--txt);font-weight:700}
+.t-warmup{color:#ffb020!important}.t-failure{color:var(--bad)!important}.t-drop{color:#4aa8ff!important}
 .srow input{text-align:center;padding:9px 4px}
 .srow .prev{background:transparent;color:var(--mut);padding:6px 2px;font-size:14px}
 .srow .chk{padding:8px 0;background:var(--card2);color:var(--mut)}
@@ -705,6 +707,12 @@ function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';cl
 function weekStart(t){const d=new Date(t);d.setHours(0,0,0,0);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return d.getTime()}
 function workoutName(){const h=new Date().getHours();return (h<12?'Morning':h<17?'Afternoon':h<21?'Evening':'Night')+' Workout'}
 const blank=()=>({w:'',r:'',done:false});
+const STYPES={normal:['1','Normal Set'],warmup:['W','Warm Up Set'],failure:['F','Failure Set'],drop:['D','Drop Set']};
+const setLabel=(sets,j)=>{const t=sets[j].t||'normal';if(t!=='normal')return STYPES[t][0];let n=0;for(let k=0;k<=j;k++)if((sets[k].t||'normal')==='normal')n++;return String(n)};
+const rtTypes=it=>{if(!Array.isArray(it.types)||it.types.length!==it.sets)it.types=Array.from({length:it.sets},(_,k)=>(it.types&&it.types[k])||'normal');return it.types};
+const routineSets=i=>Array.from({length:i.sets},(_,k)=>{const b=blank(),ty=i.types&&i.types[k];if(ty&&ty!=='normal')b.t=ty;return b});
+const routineRests=items=>{S.restByEx=S.restByEx||{};items.forEach(i=>{if(i.rest!=null)S.restByEx[i.exId]=i.rest})};
+function drawSetType(){sheet(`<h1 style="font-size:20px;text-align:center;margin-top:0">Select Set Type</h1>`+Object.entries(STYPES).map(([k,[l,n]])=>`<div class="li" data-act="pickType" data-k="${k}"><span><b class="t-${k}" style="display:inline-block;width:34px">${l}</b>${n}</span></div>`).join('')+`<div class="li" data-act="pickType" data-k="remove" style="color:var(--bad)"><span><b style="display:inline-block;width:34px">✕</b>Remove Set</span></div>`,2)}
 function volumeOf(items){let v=0;items.forEach(it=>{if(exById(it.exId).type==='wr')it.sets.forEach(s=>{if(s.done!==false&&s.t!=='warmup')v+=(s.w||0)*(s.r||0)})});return v}
 
 /* ---------- animal comparisons: [emoji, singular, plural, kg] ---------- */
@@ -759,7 +767,7 @@ function barChart(vals,labels){
 function sheet(html,layer){const el=$(layer===2?'#sheet2':'#sheet');el.innerHTML=html?`<div class="back" data-act="close${layer===2?2:1}"></div><div class="panel">${html}</div>`:'';el.className=html?'on':''}
 
 /* ---------- views ---------- */
-function setCols(type){return type==='wr'?'26px 1fr 66px 56px 36px 22px':'26px 1fr 80px 36px 22px'}
+function setCols(type){return type==='wr'?'34px 1fr 66px 56px 36px 22px':'34px 1fr 80px 36px 22px'}
 function itemHTML(it,i){
   const ex=exById(it.exId),prev=prevSets(it.exId,S.active.start),t=ex.type;
   const head=t==='wr'?`<span>SET</span><span>PREVIOUS</span><span>${U().toUpperCase()}</span><span>REPS</span><span>✓</span><span></span>`:
@@ -768,7 +776,7 @@ function itemHTML(it,i){
     const pv=p?(t==='wr'?`${dw(p.w)}×${p.r}`:t==='time'?`${p.r}s`:`${p.r}`):'–';
     const winp=t==='wr'?`<input inputmode="decimal" data-f="w" data-i="${i}" data-s="${j}" value="${esc(dw(s.w))}" placeholder="${p?dw(p.w):''}">`:'';
     return `<div class="srow ${s.done?'done':''}" style="grid-template-columns:${setCols(t)}">
-      <span class="sn">${j+1}</span>
+      <button class="sn t-${s.t||'normal'}" data-act="setType" data-i="${i}" data-s="${j}">${setLabel(it.sets,j)}</button>
       <button class="prev" data-act="copyPrev" data-i="${i}" data-s="${j}">${pv}</button>
       ${winp}<input inputmode="numeric" data-f="r" data-i="${i}" data-s="${j}" value="${esc(s.r)}" placeholder="${p&&p.r?p.r:''}">
       <button class="chk" data-act="toggleSet" data-i="${i}" data-s="${j}">✓</button>
@@ -794,7 +802,7 @@ function vWorkout(){
     <p class="muted sm">${wk} workout${wk===1?'':'s'} this week · ${S.workouts.length} total</p>
     <h2>My Routines</h2>${S.routines.length?S.routines.map(r=>`<div class="card"><div class="row-b"><div><b>${esc(r.name)}</b><div class="muted sm">${esc(r.items.map(i=>exById(i.exId).name).join(', '))}</div></div><button class="btn sm acc" data-act="startRoutine" data-id="${r.id}">Start</button></div></div>`).join(''):'<p class="muted">No routines yet. Create one in the Routines tab, or finish a workout and save it as a routine.</p>'}
     <h2>Preset Workouts <span class="sm">· <span data-act="tab" data-t="routines" style="color:var(--acc);cursor:pointer">see details</span></span></h2>${presetsHTML(true)}`}
-  let vol=0,sets=0;A.items.forEach(it=>{const t=exById(it.exId).type;it.sets.forEach(s=>{if(s.done){sets++;if(t==='wr')vol+=(s.w||0)*(s.r||0)}})});
+  let vol=0,sets=0;A.items.forEach(it=>{const t=exById(it.exId).type;it.sets.forEach(s=>{if(s.done){sets++;if(t==='wr'&&s.t!=='warmup')vol+=(s.w||0)*(s.r||0)}})});
   return `<div class="row-b"><input class="title" data-f="wname" value="${esc(A.name)}"><button class="btn sm acc" data-act="finish">Finish</button></div>
   <div class="stats3"><div><small>Duration</small><b id="elapsed">${fmtDur(Date.now()-A.start)}</b></div><div><small>Volume</small><b>${fmtVol(vol)}</b></div><div><small>Sets</small><b>${sets}</b></div></div>
   <div class="card row-b restset"><span>⏱ Default rest</span><span><button data-act="restDef" data-d="-15">−</button><b style="padding:0 10px;min-width:54px;display:inline-block;text-align:center">${fmtRest(S.settings.rest)}</b><button data-act="restDef" data-d="15">+</button></span></div>
@@ -927,8 +935,10 @@ function workoutDetail(id){
 function drawRoutine(){const r=ui.rt;
   sheet(`<div class="row-b"><h1 style="margin:0">${r.id?'Edit':'New'} routine</h1><button class="btn sm acc" data-act="saveRoutine">Save</button></div>
   <label class="lb">Name</label><input data-f="rtname" value="${esc(r.name)}" placeholder="e.g. Push Day">
-  ${r.items.map((it,i)=>`<div class="card"><div class="row-b"><b>${esc(exById(it.exId).name)}</b><button data-act="rtDel" data-i="${i}">🗑</button></div>
-    <div class="row-b" style="margin-top:8px"><span class="muted">Sets</span><span><button data-act="rtSets" data-i="${i}" data-d="-1">−</button> <b style="padding:0 10px">${it.sets}</b> <button data-act="rtSets" data-i="${i}" data-d="1">+</button></span></div></div>`).join('')}
+  ${r.items.map((it,i)=>{const ty=rtTypes(it),has=it.rest!=null,rest=has?it.rest:(+S.settings.rest||0);return `<div class="card"><div class="row-b"><b>${esc(exById(it.exId).name)}</b><button data-act="rtDel" data-i="${i}">🗑</button></div>
+    <div class="row-b exrest" style="margin-top:8px"><span class="muted sm">⏱ Rest${has?'':' (default)'}</span><span><button data-act="rtRest" data-i="${i}" data-d="-15">−</button><b style="padding:0 8px;min-width:50px;display:inline-block;text-align:center">${fmtRest(rest)}</b><button data-act="rtRest" data-i="${i}" data-d="15">+</button>${has?`<button data-act="rtRestReset" data-i="${i}" title="Use default">↺</button>`:''}</span></div>
+    ${ty.map((k,j)=>`<div class="row-b" style="margin:5px 0"><button class="chk t-${k}" style="width:44px;font-weight:700" data-act="rtType" data-i="${i}" data-s="${j}">${k==='normal'?ty.slice(0,j+1).filter(x=>x==='normal').length:STYPES[k][0]}</button><span class="muted sm" style="flex:1">${STYPES[k][1]}</span><button data-act="rtDelSet" data-i="${i}" data-s="${j}">✕</button></div>`).join('')}
+    <button class="btn ghost" style="width:100%;margin-top:6px" data-act="rtSets" data-i="${i}" data-d="1">+ Add Set</button></div>`}).join('')}
   <button class="btn big" data-act="rtAdd">+ Add Exercise</button><button class="btn ghost" style="width:100%" data-act="close1">Cancel</button>`)}
 
 /* ---------- rest timer / clock ---------- */
@@ -955,7 +965,7 @@ const ACT={
   startEmpty(){if(S.active)return render();startWorkout([])},
   startRoutine(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;
     const r=S.routines.find(x=>x.id===t.dataset.id);if(!r)return;
-    startWorkout(r.items.map(i=>({id:uid(),exId:i.exId,sets:Array.from({length:i.sets},blank)})),r.name)},
+    routineRests(r.items);startWorkout(r.items.map(i=>({id:uid(),exId:i.exId,sets:routineSets(i)})),r.name)},
   startPreset(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;
     const p=PRESETS.find(x=>x.id===t.dataset.id);if(!p)return;
     startWorkout(presetItems(p).map(i=>({id:uid(),exId:i.exId,sets:Array.from({length:i.sets},blank)})),p.name)},
@@ -984,9 +994,9 @@ const ACT={
   discard(){if(confirm('Discard this workout? Nothing will be saved.')){S.active=null;save();render()}},
   saveAsRoutine(){const A=S.active;if(!A.items.length)return toast('Add an exercise first');
     const n=prompt('Routine name',A.name);if(!n)return;
-    S.routines.push({id:uid(),name:n.trim(),items:A.items.map(i=>({exId:i.exId,sets:i.sets.length}))});save();toast('Routine saved')},
+    S.routines.push({id:uid(),name:n.trim(),items:A.items.map(i=>{const o={exId:i.exId,sets:i.sets.length,types:i.sets.map(s=>s.t||'normal')};if(S.restByEx&&S.restByEx[i.exId]!=null)o.rest=S.restByEx[i.exId];return o})});save();toast('Routine saved')},
   finish(){
-    const A=S.active,done=A.items.map(it=>({exId:it.exId,sets:it.sets.filter(s=>s.done).map(s=>({w:s.w===''?0:s.w,r:s.r===''?0:s.r}))})).filter(it=>it.sets.length);
+    const A=S.active,done=A.items.map(it=>({exId:it.exId,sets:it.sets.filter(s=>s.done).map(s=>{const o={w:s.w===''?0:s.w,r:s.r===''?0:s.r};if(s.t&&s.t!=='normal')o.t=s.t;return o})})).filter(it=>it.sets.length);
     if(!done.length){if(confirm('No completed sets. Discard this workout?')){S.active=null;save();render()}return}
     if(A.items.some(it=>it.sets.some(s=>!s.done))&&!confirm('Some sets are not ticked and will be dropped. Finish anyway?'))return;
     const w={id:A.id,name:A.name||workoutName(),start:A.start,end:Date.now(),items:done};
@@ -1008,7 +1018,19 @@ const ACT={
   delRoutine(t){if(confirm('Delete this routine?')){S.routines=S.routines.filter(r=>r.id!==t.dataset.id);save();render()}},
   rtAdd(){openPicker(ids=>{ids.forEach(id=>ui.rt.items.push({exId:id,sets:3}));drawRoutine()})},
   rtDel(t){ui.rt.items.splice(+t.dataset.i,1);drawRoutine()},
-  rtSets(t){const it=ui.rt.items[+t.dataset.i];it.sets=Math.max(1,Math.min(20,it.sets+ +t.dataset.d));drawRoutine()},
+  rtSets(t){const it=ui.rt.items[+t.dataset.i],ty=rtTypes(it);if(ty.length<20)ty.push('normal');it.sets=ty.length;drawRoutine()},
+  rtDelSet(t){const it=ui.rt.items[+t.dataset.i],ty=rtTypes(it);if(ty.length<2)return toast('A routine exercise needs at least one set');ty.splice(+t.dataset.s,1);it.sets=ty.length;drawRoutine()},
+  rtRest(t){const it=ui.rt.items[+t.dataset.i],cur=it.rest!=null?it.rest:(+S.settings.rest||0);it.rest=Math.max(0,Math.min(900,cur+ +t.dataset.d));drawRoutine()},
+  rtRestReset(t){delete ui.rt.items[+t.dataset.i].rest;drawRoutine()},
+  rtType(t){ui.st={scope:'r',i:+t.dataset.i,s:+t.dataset.s};drawSetType()},
+  setType(t){ui.st={scope:'w',i:+t.dataset.i,s:+t.dataset.s};drawSetType()},
+  pickType(t){const k=t.dataset.k,st=ui.st;if(!st)return;
+    if(st.scope==='w'){const sets=S.active.items[st.i].sets;
+      if(k==='remove')sets.splice(st.s,1);else if(k==='normal')delete sets[st.s].t;else sets[st.s].t=k;
+      save();sheet('',2);render()}
+    else{const it=ui.rt.items[st.i],ty=rtTypes(it);
+      if(k==='remove'){if(ty.length<2){sheet('',2);return toast('A routine exercise needs at least one set')}ty.splice(st.s,1);it.sets=ty.length}else ty[st.s]=k;
+      sheet('',2);drawRoutine()}},
   saveRoutine(){const r=ui.rt;if(!r.name.trim())return toast('Give the routine a name');if(!r.items.length)return toast('Add at least one exercise');
     r.name=r.name.trim();if(r.id){const i=S.routines.findIndex(x=>x.id===r.id);S.routines[i]=r}else{r.id=uid();S.routines.push(r)}save();sheet('');render()},
   /* exercises */
@@ -1028,9 +1050,9 @@ const ACT={
   /* history */
   viewWorkout(t){sheet(workoutDetail(t.dataset.id))},
   delWorkout(t){if(confirm('Delete this workout permanently?')){S.workouts=S.workouts.filter(w=>w.id!==t.dataset.id);save();sheet('');render()}},
-  repeatWorkout(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;const w=S.workouts.find(x=>x.id===t.dataset.id);startWorkout(w.items.map(i=>({id:uid(),exId:i.exId,sets:i.sets.map(blank)})),w.name)},
+  repeatWorkout(t){if(S.active&&!confirm('A workout is in progress. Replace it?'))return;const w=S.workouts.find(x=>x.id===t.dataset.id);startWorkout(w.items.map(i=>({id:uid(),exId:i.exId,sets:i.sets.map(s=>{const b=blank();if(s.t)b.t=s.t;return b})})),w.name)},
   wToRoutine(t){const w=S.workouts.find(x=>x.id===t.dataset.id),n=prompt('Routine name',w.name);if(!n)return;
-    S.routines.push({id:uid(),name:n.trim(),items:w.items.map(i=>({exId:i.exId,sets:i.sets.length}))});save();toast('Routine saved')},
+    S.routines.push({id:uid(),name:n.trim(),items:w.items.map(i=>({exId:i.exId,sets:i.sets.length,types:i.sets.map(s=>s.t||'normal')}))});save();toast('Routine saved')},
   /* settings */
   unit(t){S.settings.unit=t.dataset.u;save();render()},
   exportJson(){download(`workout-tracker-backup-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(S,null,1),'application/json')},
