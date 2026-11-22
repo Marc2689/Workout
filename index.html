@@ -764,7 +764,11 @@ function barChart(vals,labels){
     <text x="${(x+bw*.35).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--mut)">${labels[i]}</text>`}).join('')}</svg>`}
 
 /* ---------- sheets ---------- */
-function sheet(html,layer){const el=$(layer===2?'#sheet2':'#sheet');el.innerHTML=html?`<div class="back" data-act="close${layer===2?2:1}"></div><div class="panel">${html}</div>`:'';el.className=html?'on':''}
+function sheet(html,layer){const el=$(layer===2?'#sheet2':'#sheet');
+  /* redrawing an already-open sheet (e.g. editing a routine) must keep its scroll position */
+  const old=html&&el.classList.contains('on')?el.querySelector('.panel'):null,keep=old?old.scrollTop:0;
+  el.innerHTML=html?`<div class="back" data-act="close${layer===2?2:1}"></div><div class="panel">${html}</div>`:'';el.className=html?'on':'';
+  if(keep){const p=el.querySelector('.panel');if(p)p.scrollTop=keep}}
 
 /* ---------- views ---------- */
 function setCols(type){return type==='wr'?'34px 1fr 66px 56px 36px 22px':'34px 1fr 80px 36px 22px'}
